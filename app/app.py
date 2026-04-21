@@ -1,7 +1,8 @@
 from flask import Flask 
 import os
 
-password="1234567" 
+# Pulls from system environment, defaults to None if not found
+password = os.environ.get("APP_PASSWORD")
  
 app = Flask(__name__) 
 @app.route("/")
@@ -11,4 +12,5 @@ def home():
 	return f"Hello, Secret is {secret}"
  
 if __name__ == "__main__": 
-	app.run(host="0.0.0.0", port=5000) 
+	host = os.environ.get("FLASK_HOST", "127.0.0.1")
+	app.run(host=host, port=5000) 
