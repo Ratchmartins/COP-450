@@ -12,3 +12,8 @@ name: CI Pipeline
 
       - name: Run Tests 
         run: pytest 
+
+      - name: Install Bandit 
+        run: pip install bandit
+      - name: Run Security Scan 
+        run: bandit -r app/
