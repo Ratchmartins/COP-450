@@ -1,6 +1,8 @@
 FROM python:3.10-slim 
 WORKDIR /app 
-COPY . . 
+COPY . .
+# Add this before you copy your requirements
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/* 
 RUN pip install -r requirements.txt 
 CMD ["python", "app/app.py"] 
 
