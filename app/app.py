@@ -1,10 +1,10 @@
 from flask import Flask 
 import os
+
+password="1234567" 
  
 app = Flask(__name__) 
 @app.route("/")
-
-password = "12345"
  
 def home(): 
 	secret = os.getenv("APP_SECRET") 
