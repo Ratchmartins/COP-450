@@ -26,58 +26,43 @@ jobs:
         run: bandit -r app/
 
   # 2. Build and Deploy Job
-  deploy-test:
+  deploy-production:
     needs: test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # Required to push to GitHub Container Registry
     steps:
       - uses: actions/checkout@v3
 
-      # Build the Docker image
-      - name: Build Docker Image
-        run: docker build -t secure-app:latest .
-
-      # Setup Kubernetes-in-Docker (Kind)
-      - name: Create K8s Cluster
-        uses: helm/kind-action@v1.5.0
+      # 1. Login to GitHub Container Registry
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
         with:
-          cluster_name: secure-cluster  # Explicitly name the cluster
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Load the image into the Kind cluster
-      - name: Load image into Kind
-        run: kind load docker-image secure-app:latest --name secure-cluster
+      # 2. Build and Push to Registry
+      - name: Build and Push
+        uses: docker/build-push-action@v4
+        with:
+          push: true
+          tags: ghcr.io/${{ github.repository }}/secure-app:latest
 
-      # Apply your Kubernetes Manifests
-      - name: Deploy to K8s
-        run: kubectl apply -f k8s/
-
-      # Verify Accessibility (The "Sanity Check")
-      - name: Wait for Deployment
-        run: kubectl wait --for=condition=ready pod -l app=secure-app --timeout=60s
-      - name: Start ngrok
-        run: |
-          # Install ngrok
-          curl -sSL https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
-          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
-          sudo apt update && sudo apt install ngrok
-          
-          # Start the tunnel in the background
-          ngrok authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
-          ngrok http 5000 > /dev/null &
-          
-          # Get the URL
-          sleep 5
-          curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url'
-          echo "========================================"
-          echo "YOUR NGROK URL IS: $URL"
-          echo "========================================"
-
-      - name: Functional Test
-        run: |
-          # Use port-forward to test connectivity
-          kubectl port-forward deployment/secure-app 5000:5000 &
-          sleep 5
-          curl -I http://localhost:5000
-      
-      
-      - name: Keep alive for testing
-        run: sleep 600 # Keeps the pipeline alive for 10 minutes so you can browse it
+      # 3. SSH into Kali VM and update Kubernetes
+      - name: Deploy to Kali VM
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.KALI_VM_IP }} # 172.168.11.126
+          username: ${{ secrets.KALI_USER }}
+          key: ${{ secrets.KALI_SSH_KEY }}
+          script: |
+            # Pull the new image on the server
+            sudo crictl pull ghcr.io/${{ github.repository }}/secure-app:latest
+            
+            # Tell K8s to use the new image
+            sudo kubectl set image deployment/secure-app secure-app=ghcr.io/${{ github.repository }}/secure-app:latest -n default
+            
+            # Wait for rollout to complete
+            sudo kubectl rollout status deployment/secure-app -n default

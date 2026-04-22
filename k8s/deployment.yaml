@@ -7,15 +7,23 @@ spec:
   selector:
     matchLabels:
       app: secure-app
-  template: # This is the Pod Blueprint
+  template:
     metadata:
       labels:
         app: secure-app
-    spec: # <--- THIS IS THE POD SPEC
-      containers: # <--- CONTAINERS MUST BE INSIDE THE POD SPEC
+    spec:
+      # 1. Add this for private registry access
+      imagePullSecrets:
+      - name: ghcr-login-secret 
+      
+      containers:
       - name: secure-app
-        image: secure-app:latest
-        imagePullPolicy: Never  # <--- ADD THIS LINE
+        # 2. Point to the Registry, not the local file
+        image: ghcr.io/Ratchmartins/secure-app:latest
+        
+        # 3. Change to 'Always' so K8s fetches the newest code
+        imagePullPolicy: Always 
+        
         env:
         - name: FLASK_HOST
           value: "0.0.0.0"
