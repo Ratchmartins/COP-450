@@ -19,7 +19,7 @@ spec:
       containers:
       - name: secure-app
         # 2. Point to the Registry, not the local file
-        image: ghcr.io/Ratchmartins/secure-app:latest
+        image: ghcr.io/ratchmartins/cop-450/secure-app:latest
         
         # 3. Change to 'Always' so K8s fetches the newest code
         imagePullPolicy: Always 
