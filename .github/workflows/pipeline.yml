@@ -53,6 +53,20 @@ jobs:
       # Verify Accessibility (The "Sanity Check")
       - name: Wait for Deployment
         run: kubectl wait --for=condition=ready pod -l app=secure-app --timeout=60s
+      - name: Start ngrok
+        run: |
+          # Install ngrok
+          curl -sSL https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
+          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
+          sudo apt update && sudo apt install ngrok
+          
+          # Start the tunnel in the background
+          ngrok authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
+          ngrok http 5000 > /dev/null &
+          
+          # Get the URL
+          sleep 5
+          curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url'
 
       - name: Functional Test
         run: |
