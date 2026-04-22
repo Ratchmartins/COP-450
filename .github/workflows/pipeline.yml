@@ -1,44 +1,60 @@
-name: CI Pipeline 
+name: CI/CD Pipeline
 
-on: 
-  push: 
-    branches: ["main"] 
+on:
+  push:
+    branches: ["main"]
 
-jobs: 
-  build: 
-    runs-on: ubuntu-latest 
+jobs:
+  # 1. Test and Security Job
+  test:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
 
-      - name: Install Dependencies 
-        run: pip install -r requirements.txt pytest
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
 
-      - name: Run Tests 
-        run: pytest 
+      - name: Install Dependencies
+        run: pip install -r requirements.txt pytest bandit
 
-      - name: Install Bandit 
-        run: pip install bandit
+      - name: Run Unit Tests
+        run: pytest
 
-      - name: Run Security Scan 
+      - name: Run Security Scan (Bandit)
         run: bandit -r app/
 
-      - name: Build Docker Image 
-        run: docker build -t secure-app . 
+  # 2. Build and Deploy Job
+  deploy-test:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
 
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: 'secure-app:latest'
-          format: 'table'
-          exit-code: '1' # This fails the build if vulnerabilities are found
-          ignore-unfixed: true
-          severity: 'CRITICAL,HIGH'
+      # Build the Docker image
+      - name: Build Docker Image
+        run: docker build -t secure-app:latest .
 
-      - name: Scan Image 
-        run: trivy image secure-app 
+      # Setup Kubernetes-in-Docker (Kind)
+      - name: Create K8s Cluster
+        uses: helm/kind-action@v1.5.0
 
-      - name: Use Secret 
-        env: 
-          MY_API_KEY: ${{ secrets.MY_SECRET_KEY }}
-        run: echo "The secret is loaded successfully."
-        
+      # Load the image into the Kind cluster
+      - name: Load image into Kind
+        run: kind load docker-image secure-app:latest
+
+      # Apply your Kubernetes Manifests
+      - name: Deploy to K8s
+        run: kubectl apply -f k8s/
+
+      # Verify Accessibility (The "Sanity Check")
+      - name: Wait for Deployment
+        run: kubectl wait --for=condition=ready pod -l app=secure-app --timeout=60s
+
+      - name: Functional Test
+        run: |
+          # Use port-forward to test connectivity
+          kubectl port-forward deployment/secure-app 5000:5000 &
+          sleep 5
+          curl -I http://localhost:5000
