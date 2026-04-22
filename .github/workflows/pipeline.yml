@@ -67,6 +67,9 @@ jobs:
           # Get the URL
           sleep 5
           curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url'
+          echo "========================================"
+          echo "YOUR NGROK URL IS: $URL"
+          echo "========================================"
 
       - name: Functional Test
         run: |
