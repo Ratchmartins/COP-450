@@ -3,13 +3,13 @@ import os
 
 # Pulls from system environment, defaults to None if not found in system
 # Rename 'password' to 'app_credentials' or 'env_password'
-app_credentials = os.environ.get("APP_PASSWORD")
+#app_credentials = os.environ.get("APP_PASSWORD")
  
 app = Flask(__name__) 
 @app.route("/")
  
 def home(): 
-	secret = os.getenv("APP_SECRET") 
+	#secret = os.getenv("APP_SECRET") 
 	return f"Hello, The Application is running securely"
  
 if __name__ == "__main__": 
