@@ -1,7 +1,7 @@
 from flask import Flask 
 import os
 
-# Pulls from system environment, defaults to None if not found
+# Pulls from system environment, defaults to None if not found in system
 password = os.environ.get("APP_PASSWORD")
  
 app = Flask(__name__) 
