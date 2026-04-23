@@ -13,5 +13,5 @@ def home():
 	return f"Hello, The Application is running securely"
  
 if __name__ == "__main__": 
-	host = os.environ.get("FLASK_HOST", "0.0.0.0") # nosec B104
+	host = '0.0.0.0' #nosec B104
 	app.run(host=host, port=5000) # nosec B104
