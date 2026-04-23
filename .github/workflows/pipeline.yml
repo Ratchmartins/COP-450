@@ -71,9 +71,7 @@ jobs:
 
             
             # Tell K8s to use the new image
-            sudo kubectl set image deployment/secure-app secure-app=${{ env.IMAGE_NAME }}
-            # Tell K8s to use the new image
-        sudo kubectl set image deployment/secure-app secure-app=${{ env.IMAGE_NAME }} -n default
+            sudo kubectl set image deployment/secure-app secure-app=${{ env.IMAGE_NAME }} -n default
             
             # Wait for rollout to complete
             sudo kubectl rollout status deployment/secure-app -n default
