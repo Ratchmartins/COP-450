@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html>
+<body>
+    <h1>Edit Item</h1>
+    <form method="POST">
+        <input type="text" name="name" value="{{ item.name }}" required>
+        <button type="submit">Update</button>
+    </form>
+    <a href="{{ url_for('index') }}">Cancel</a>
+</body>
+</html>

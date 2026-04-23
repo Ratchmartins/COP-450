@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<body>
+    <h1>Security Lab: Asset Manager</h1>
+    <p>Served by: {{ pod }}</p>
+    
+    <form method="POST">
+        <input type="text" name="name" placeholder="New Item Name" required>
+        <button type="submit">Add Item</button>
+    </form>
+
+    <table border="1" style="margin-top:20px;">
+        {% for item in items %}
+        <tr>
+            <td>{{ item.name }}</td>
+            <td><a href="{{ url_for('edit', id=item.id) }}">Edit</a></td>
+            <td><a href="{{ url_for('delete', id=item.id) }}">Delete</a></td>
+        </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>
