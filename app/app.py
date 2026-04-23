@@ -2,7 +2,8 @@ from flask import Flask
 import os
 
 # Pulls from system environment, defaults to None if not found in system
-password = os.environ.get("APP_PASSWORD")
+# Rename 'password' to 'app_credentials' or 'env_password'
+app_credentials = os.environ.get("APP_PASSWORD")
  
 app = Flask(__name__) 
 @app.route("/")
