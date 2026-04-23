@@ -8,6 +8,9 @@ jobs:
   # 1. Test and Security Job
   test:
     runs-on: ubuntu-latest
+    env:
+      # This creates a lowercase version of your repo name to use later
+      IMAGE_NAME: ""
     steps:
       - uses: actions/checkout@v3
 
@@ -43,12 +46,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+          # Add this specific step to set the lowercase variable
+      - name: Set lower case owner name
+        run: |
+          echo "IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY,,}/secure-app:latest" >> $GITHUB_ENV
+
       # 2. Build and Push to Registry
       - name: Build and Push
         uses: docker/build-push-action@v4
         with:
           push: true
-          tags: ghcr.io/${{ github.repository | downcase }}/secure-app:latest
+          tags: ${{ env.IMAGE_NAME }}
 
       # 3. SSH into Kali VM and update Kubernetes
       - name: Deploy to Kali VM
