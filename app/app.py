@@ -9,7 +9,7 @@ app = Flask(__name__)
  
 def home(): 
 	secret = os.getenv("APP_SECRET") 
-	return f"Hello, Secret is {secret}"
+	return f"Hello, The Application is running securely"
  
 if __name__ == "__main__": 
 	host = os.environ.get("FLASK_HOST", "0.0.0.0")
