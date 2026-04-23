@@ -48,7 +48,7 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           push: true
-          tags: ghcr.io/${{ github.repository }}/secure-app:latest
+          tags: ghcr.io/${{ github.repository | downcase }}/secure-app:latest
 
       # 3. SSH into Kali VM and update Kubernetes
       - name: Deploy to Kali VM
@@ -59,7 +59,7 @@ jobs:
           key: ${{ secrets.KALI_SSH_KEY }}
           script: |
             # Pull the new image on the server
-            sudo crictl pull ghcr.io/${{ github.repository }}/secure-app:latest
+            sudo crictl pull ghcr.io/${{ github.repository | downcase }}/secure-app:latest
             
             # Tell K8s to use the new image
             sudo kubectl set image deployment/secure-app secure-app=ghcr.io/${{ github.repository }}/secure-app:latest -n default
