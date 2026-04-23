@@ -49,7 +49,7 @@ jobs:
       - name: Deploy to Local Kubernetes
         run: |
           # Pull the new image locally
-          sudo crictl pull ${{ env.IMAGE_NAME }}
+          sudo -n crictl pull ${{ env.IMAGE_NAME }}
           
           # Update the deployment
           kubectl set image deployment/secure-app secure-app=${{ env.IMAGE_NAME }} -n default
