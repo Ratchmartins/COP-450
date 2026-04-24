@@ -2,30 +2,33 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: secure-app
+  labels:
+    app: secure-app
 spec:
-  replicas: 1
+  replicas: 20
+  # Tells the deployment which pods it is responsible for
   selector:
     matchLabels:
       app: secure-app
   template:
     metadata:
+      # These labels MUST match the selector above
       labels:
         app: secure-app
     spec:
-      # 1. Add this for private registry access
+      # Required for pulling your private image from GitHub Container Registry
       imagePullSecrets:
-      - name: ghcr-login-secret 
-      
+        - name: ghcr-login-secret
       containers:
       - name: secure-app
-        # 2. Point to the Registry, not the local file
+        # Using the GHCR path from your pipeline logs
         image: ghcr.io/ratchmartins/cop-450/secure-app:latest
-        
-        # 3. Change to 'Always' so K8s fetches the newest code
-        imagePullPolicy: Always 
-        
+        # Forces K3s to check for a new image even if the tag is 'latest'
+        imagePullPolicy: Always
         env:
-        - name: FLASK_HOST
-          value: "0.0.0.0"
+        - name: DB_HOST
+          value: "db-service"
+        - name: DB_PASS
+          value: "password"
         ports:
         - containerPort: 5000

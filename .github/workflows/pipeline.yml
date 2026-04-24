@@ -23,6 +23,7 @@ jobs:
 
   # 2. Build and Deploy Job
   deploy-production:
+    needs: test  # Only deploy if tests pass!
     runs-on: self-hosted
     steps:
       - name: Checkout code
@@ -35,8 +36,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set lower case owner name
+      - name: Set Image Name
         run: |
+          # Ensuring path is ghcr.io/ratchmartins/cop-450/secure-app:latest
           echo "IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY,,}/secure-app:latest" >> $GITHUB_ENV
 
       - name: Build and Push
@@ -45,14 +47,17 @@ jobs:
           push: true
           tags: ${{ env.IMAGE_NAME }}
 
-      # Deploy locally - No SSH needed!
       - name: Deploy to Local Kubernetes
         run: |
-          # Pull the new image locally
+          # 1. Set context for K3s
+          export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+          
+          # 2. Force pull the latest image to the local node
           sudo -n crictl pull ${{ env.IMAGE_NAME }}
           
-          # Update the deployment
-          kubectl set image deployment/secure-app secure-app=${{ env.IMAGE_NAME }} -n default
+          # 3. Apply the entire configuration folder (Deployment, Service, Ingress)
+          # This handles your replicas, imagePullSecrets, and the Nginx Ingress all at once.
+          kubectl apply -f k8s/
           
-          # Wait for rollout to complete
+          # 4. Wait for the secure-app deployment to be ready
           kubectl rollout status deployment/secure-app -n default
