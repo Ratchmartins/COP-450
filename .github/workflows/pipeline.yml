@@ -5,7 +5,6 @@ on:
     branches: ["main"]
 
 jobs:
-  # 1. Test and Security Job
   test:
     runs-on: ubuntu-latest
     steps:
@@ -21,13 +20,23 @@ jobs:
       - name: Run Security Scan (Bandit)
         run: bandit -r app/
 
-  # 2. Build and Deploy Job
   deploy-production:
-    needs: test  # Only deploy if tests pass!
+    needs: test
     runs-on: self-hosted
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+
+      - name: Configure K3s (Disable Traefik & Prepare Nginx)
+        run: |
+          # 1. Create config directory if not exists
+          sudo mkdir -p /etc/rancher/k3s/
+          # 2. Set the config to disable Traefik explicitly
+          echo "disable: [traefik]" | sudo tee /etc/rancher/k3s/config.yaml
+          # 3. Restart K3s to apply the change (Traefik will disappear, freeing port 80)
+          sudo systemctl restart k3s
+          # 4. Give the cluster a moment to stabilize
+          sleep 10
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
@@ -38,7 +47,6 @@ jobs:
 
       - name: Set Image Name
         run: |
-          # Ensuring path is ghcr.io/ratchmartins/cop-450/secure-app:latest
           echo "IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY,,}/secure-app:latest" >> $GITHUB_ENV
 
       - name: Build and Push
@@ -49,15 +57,13 @@ jobs:
 
       - name: Deploy to Local Kubernetes
         run: |
-          # 1. Set context for K3s
           export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
           
-          # 2. Force pull the latest image to the local node
+          # Pull the new image
           sudo -n crictl pull ${{ env.IMAGE_NAME }}
           
-          # 3. Apply the entire configuration folder (Deployment, Service, Ingress)
-          # This handles your replicas, imagePullSecrets, and the Nginx Ingress all at once.
+          # Apply the entire configuration folder (Deployment, Service, Ingress)
           kubectl apply -f k8s/
           
-          # 4. Wait for the secure-app deployment to be ready
+          # Wait for the secure-app deployment
           kubectl rollout status deployment/secure-app -n default
