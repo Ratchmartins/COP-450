@@ -16,7 +16,6 @@ app.config['SQLALCHEMY_DATABASE_URI'] = f'postgresql://{DB_USER}:{DB_PASS}@{DB_H
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
-password="Cyberpro@123"
 
 # --- Database Model ---
 class Item(db.Model):
