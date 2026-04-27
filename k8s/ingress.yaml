@@ -2,9 +2,9 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: secure-app-ingress
-  annotations:
-    ingressClassName: nginx
+  # Removed ingressClassName from here
 spec:
+  ingressClassName: nginx  # <--- Moved to spec (this is the standard)
   rules:
   - host: myapp.local
     http:
@@ -15,4 +15,4 @@ spec:
           service:
             name: secure-app-service
             port:
-              number: 80  # This MUST match service.yaml port: 80
+              number: 80
