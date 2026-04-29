@@ -5,25 +5,21 @@ metadata:
   labels:
     app: secure-app
 spec:
-  replicas: 20
-  # Tells the deployment which pods it is responsible for
+  # Reduced to 2 to prevent overloading your Kali node
+  replicas: 5
   selector:
     matchLabels:
       app: secure-app
   template:
     metadata:
-      # These labels MUST match the selector above
       labels:
         app: secure-app
     spec:
-      # Required for pulling your private image from GitHub Container Registry
       imagePullSecrets:
         - name: ghcr-login-secret
       containers:
       - name: secure-app
-        # Using the GHCR path from your pipeline logs
         image: ghcr.io/ratchmartins/cop-450/secure-app:latest
-        # Forces K3s to check for a new image even if the tag is 'latest'
         imagePullPolicy: Always
         env:
         - name: DB_HOST
@@ -32,3 +28,22 @@ spec:
           value: "password"
         ports:
         - containerPort: 5000
+
+        # --- PROBES ADDED BELOW ---
+
+        # READINESS: Only sends users to this pod if the /health route returns 200 OK
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 10   # Give Flask a moment to boot up
+          periodSeconds: 5          # Check frequently to catch DB drops quickly
+          failureThreshold: 3       # If it fails 3 times, take it out of the service rotation
+
+        # LIVENESS: Restarts the pod if the app completely freezes
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 20   # Give it plenty of time for the first start
+          periodSeconds: 15         # Don't check too often to save CPU

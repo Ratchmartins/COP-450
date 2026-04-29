@@ -22,6 +22,22 @@ spec:
           value: password
         ports:
         - containerPort: 5432
+        
+        # --- PROBES ADDED BELOW ---
+        
+        # READINESS: Ensures DB is finished initializing before app connects
+        readinessProbe:
+          tcpSocket:
+            port: 5432
+          initialDelaySeconds: 5   # Give it 5 seconds to start the process
+          periodSeconds: 10        # Check every 10 seconds
+          
+        # LIVENESS: Restarts the container if the DB process hangs/freezes
+        livenessProbe:
+          tcpSocket:
+            port: 5432
+          initialDelaySeconds: 15  # Give it more time for first-time startup
+          periodSeconds: 20        # Check every 20 seconds
 ---
 apiVersion: v1
 kind: Service
