@@ -58,3 +58,5 @@ jobs:
           
           # Wait for the secure-app deployment to be ready
           kubectl rollout status deployment/secure-app -n default
+# Restart the Kubernets Cluster
+kubectl  rollout restart deployment secure-app
