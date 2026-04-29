@@ -6,7 +6,7 @@ metadata:
     app: secure-app
 spec:
   # Reduced to 2 to prevent overloading your Kali node
-  replicas: 5
+  replicas: 20
   selector:
     matchLabels:
       app: secure-app
