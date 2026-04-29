@@ -1,12 +1,12 @@
-from flask import Flask, request, render_template, redirect, url_for
+from flask import Flask, request, render_template, redirect, url_for, jsonify
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import text
 import os
 import socket
 
 app = Flask(__name__)
 
 # --- Database Configuration ---
-# Fetching from env vars is best practice for security and K8s configuration
 DB_USER = os.getenv('DB_USER', 'postgres')
 DB_PASS = os.getenv('DB_PASS', 'password')
 DB_HOST = os.getenv('DB_HOST', 'db-service')
@@ -26,11 +26,21 @@ class Item(db.Model):
 with app.app_context():
     db.create_all()
 
+# --- Health Check Route ---
+@app.route('/health')
+def health():
+    """Health check for Kubernetes Liveness and Readiness Probes."""
+    try:
+        # This checks if the app can actually talk to the DB
+        db.session.execute(text('SELECT 1'))
+        return jsonify({"status": "healthy", "pod": socket.gethostname()}), 200
+    except Exception as e:
+        return jsonify({"status": "unhealthy", "error": str(e)}), 500
+
 # --- Routes ---
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    """Handles both the view list and the add-item form."""
     if request.method == 'POST':
         name = request.form.get('name')
         if name:
@@ -40,12 +50,10 @@ def index():
         return redirect(url_for('index'))
     
     items = Item.query.all()
-    # socket.gethostname() allows you to identify which Pod is responding
     return render_template('index.html', items=items, pod=socket.gethostname())
 
 @app.route('/edit/<int:id>', methods=['GET', 'POST'])
 def edit(id):
-    """Handles editing an existing item."""
     item = Item.query.get_or_404(id)
     if request.method == 'POST':
         item.name = request.form.get('name')
@@ -55,13 +63,10 @@ def edit(id):
 
 @app.route('/delete/<int:id>')
 def delete(id):
-    """Handles deleting an item."""
     item = Item.query.get_or_404(id)
     db.session.delete(item)
     db.session.commit()
     return redirect(url_for('index'))
 
 if __name__ == '__main__':
-    # Binding to 0.0.0.0 is required for K8s ingress traffic.
-    # '# nosec B104' is a Bandit exception for this necessary configuration.
-    app.run(host='0.0.0.0', port=5000)  # nosec B104
+    app.run(host='0.0.0.0', port=5000)
