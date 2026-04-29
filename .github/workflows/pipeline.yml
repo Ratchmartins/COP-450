@@ -15,7 +15,7 @@ jobs:
         with:
           python-version: '3.10'
       - name: Install Dependencies
-        run: pip install -r requirements.txt pytest bandit
+        run: pip install -r requirements.txt pytest bandit trivy
       - name: Run Unit Tests
         run: pytest
       - name: Run Security Scan (Bandit)
