@@ -1,11 +1,56 @@
 <!DOCTYPE html>
-<html>
-<body>
-    <h1>Edit Item</h1>
-    <form method="POST">
-        <input type="text" name="name" value="{{ item.name }}" required>
-        <button type="submit">Update</button>
-    </form>
-    <a href="{{ url_for('index') }}">Cancel</a>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Item</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-50 flex items-center justify-center min-h-screen">
+
+    <div class="w-full max-w-md bg-white rounded-xl shadow-lg border border-slate-200 p-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-2xl font-semibold text-slate-800">Edit Item</h1>
+            <p class="text-sm text-slate-500 mt-1">Update the information for this record below.</p>
+        </div>
+
+        <!-- Form -->
+        <form method="POST" class="space-y-6">
+            <div>
+                <label for="name" class="block text-sm font-medium text-slate-700 mb-2">Item Name</label>
+                <input 
+                    type="text" 
+                    id="name"
+                    name="name" 
+                    value="{{ item.name }}" 
+                    required
+                    placeholder="Enter item name"
+                    class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all duration-200 text-slate-900"
+                >
+            </div>
+
+            <div class="flex items-center gap-4 pt-2">
+                <button 
+                    type="submit" 
+                    class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors duration-200 shadow-sm"
+                >
+                    Update Item
+                </button>
+                
+                <a 
+                    href="{{ url_for('index') }}" 
+                    class="flex-1 text-center bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium py-2.5 px-4 rounded-lg transition-colors duration-200"
+                >
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+
 </body>
 </html>
