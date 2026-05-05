@@ -5,31 +5,23 @@ on:
     branches: ["main"]
 
 jobs:
-  # 1. SECURITY & QUALITY JOB: Validate logic and code-level security before building
+  # 1. Security & Quality Job (Pytest & Bandit)
   security-and-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-
       - name: Install Dependencies
-        run: |
-          # Install production requirements plus testing and security tools
-          pip install -r requirements.txt pytest bandit
-
-      - name: Run Unit Tests (Pytest)
-        # Functional Check: Ensures core application logic isn't broken
+        run: pip install -r requirements.txt pytest bandit
+      - name: Run Unit Tests
         run: pytest
-
       - name: Run Code Scan (Bandit)
-        # SAST: Scans source code for common security issues (e.g., hardcoded creds, insecure imports)
         run: bandit -r app/
 
-  # 2. BUILD AND SCAN JOB: Build the container and verify its supply chain security
+  # 2. Build and Scan Job (Docker & Trivy)
   build-and-scan:
     needs: security-and-test
     runs-on: ubuntu-latest
@@ -39,69 +31,58 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-
-      - name: Login to GitHub Container Registry
+      - name: Login to GHCR
         uses: docker/login-action@v2
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Set Image Name (Lowercase)
-        run: |
-          # FORCED LOWERCASE: GHCR and Docker require lowercase repository paths.
-          # This prevents the 'failed to parse image name' error
-          echo "IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY,,}/secure-app:latest" >> $GITHUB_ENV
-
+        run: echo "IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY,,}/secure-app:latest" >> $GITHUB_ENV
       - name: Build and Push
-        # Builds the image using the lowercase ENV variable set above
         uses: docker/build-push-action@v4
         with:
           push: true
           tags: ${{ env.IMAGE_NAME }}
-
       - name: Run Container Scan (Trivy)
-        # SCA: Scans the final built image for OS-level vulnerabilities (CVEs)
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.IMAGE_NAME }}
           format: 'table'
-          # FAIL-FAST: If CRITICAL or HIGH vulnerabilities are found, the pipeline stops here
-          exit-code: '1' 
+          exit-code: '1'
           ignore-unfixed: true
           severity: 'CRITICAL,HIGH'
 
-  # 3. DEPLOY JOB: Orchestrate the transition to the Master-Slave K8s environment
+  # 3. Deploy Job (Orchestration)
   deploy-production:
     needs: build-and-scan
-    runs-on: self-hosted  # Runs on your local Ubuntu runner
+    runs-on: self-hosted
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-
       - name: Deploy to Local Kubernetes
         run: |
-          # Point to the local Kubeconfig on the Martine's runner
           export KUBECONFIG=$HOME/.kube/config
-          
-          # A. DEPLOY DATABASE: Start the CloudNativePG Master-Slave cluster
+
+          # CLEANUP: Remove old standalone DB to free up RAM for pg-asanti
+          kubectl delete deployment db-deployment --ignore-not-found=true
+
+          # 1. Apply Master-Slave Cluster
           kubectl apply -f k8s/db-cluster.yaml
-          
-          # B. RACE CONDITION PREVENTION: Wait for the DB Primary to be 'Ready'
-          # This ensures the app doesn't crash on startup due to connection errors
-          echo "Waiting for pg-asanti cluster to reach Ready state..."
-          sleep 30
-          kubectl wait --for=jsonpath='{.status.phase}'=Ready cluster/pg-asanti --timeout=300s
-          
-          # C. APPLY NETWORKING & APP: Deploy the ingress, service, and application pods
+
+          # 2. Robust Wait Logic
+          echo "Waiting for pg-asanti cluster to be Ready..."
+          # Increased timeout to 600s because VirtualBox can be slow
+          kubectl wait --for=jsonpath='{.status.phase}'=Ready cluster/pg-asanti --timeout=600s
+
+          # 3. Apply Networking & Application
           kubectl apply -f k8s/service.yaml
           kubectl apply -f k8s/deployment2.yaml
           kubectl apply -f k8s/ingress.yaml
-          
-          # D. ROLLOUT MONITORING: Watch the 5 replicas stabilize
-          # Extended timeout for VirtualBox resource constraints
-          echo "Monitoring application rollout for 'secure-app'..."
+
+          # 4. Monitor Rollout
+          echo "Monitoring application rollout..."
           kubectl rollout status deployment/secure-app --timeout=600s
-          
-          # E. FINAL REFRESH: Force a restart to pick up the latest GHCR image push
+
+          # 5. Final restart to ensure clean environment
           kubectl rollout restart deployment secure-app
