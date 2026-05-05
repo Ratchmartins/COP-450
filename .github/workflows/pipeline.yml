@@ -49,18 +49,29 @@ jobs:
 
       - name: Deploy to Local Kubernetes
         run: |
-          # We use the standard kubeconfig path for the runner user
+          # Use the standard kubeconfig path for the self-hosted runner
           export KUBECONFIG=$HOME/.kube/config
           
-          # Apply the configuration folder (Deployment, Service, Ingress)
-          # Kubernetes handles the image pull automatically
-          #kubectl apply -f k8s/
-          kubectl apply -f k8s/db-cluster.yaml  # 1. Start the DB brain
-          kubectl apply -f k8s/service.yaml     # 2. Set up the App gateway
-          kubectl apply -f k8s/deployment2.yaml  # 3. Launch the App pods
-          kubectl apply -f k8s/ingress.yaml      # 4. Open external access
+          # 1. Start the Master-Slave Database Cluster
+          # Using CloudNativePG operator to manage the pg-asanti instances
+          kubectl apply -f k8s/db-cluster.yaml
           
-          # Wait for the secure-app deployment to be ready
-          kubectl rollout status deployment/secure-app -n default
-          # Restart the Kubernets Cluster
-          kubectl  rollout restart deployment secure-app
+          # 2. Wait for Database to be Ready
+          # This prevents the app from failing its Readiness Probe during rollout
+          echo "Waiting for PostgreSQL cluster (pg-asanti) to reach Ready state..."
+          sleep 30 # Initial buffer for API registration
+          kubectl wait --for=jsonpath='{.status.phase}'=Ready cluster/pg-asanti --timeout=300s[cite: 1]
+          
+          # 3. Apply Networking and Application
+          kubectl apply -f k8s/service.yaml
+          kubectl apply -f k8s/deployment2.yaml
+          kubectl apply -f k8s/ingress.yaml
+          
+          # 4. Monitor Application Rollout
+          # Increased timeout to 600s to account for VirtualBox resource constraints
+          echo "Monitoring application rollout for 'secure-app'..."
+          kubectl rollout status deployment/secure-app --timeout=600s
+          
+          # 5. Final Refresh
+          # Ensures the latest image and configuration are fully operational
+          kubectl rollout restart deployment secure-app
