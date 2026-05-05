@@ -5,7 +5,7 @@ on:
     branches: ["main"]
 
 jobs:
-  # 1. SECURITY & QUALITY: Bandit for SAST and Pytest for logic
+  # 1. SECURITY & TESTING: SAST and Unit tests
   security-and-test:
     runs-on: ubuntu-latest
     steps:
@@ -21,7 +21,7 @@ jobs:
       - name: Run Code Scan (Bandit)
         run: bandit -r app/
 
-  # 2. BUILD AND SCAN: Build container and run Trivy SCA
+  # 2. BUILD AND SCAN: Build image and perform SCA with Trivy
   build-and-scan:
     needs: security-and-test
     runs-on: ubuntu-latest
@@ -38,7 +38,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Set Image Name (Lowercase)
-        # Prevents parsing errors seen in earlier runs
         run: echo "IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY,,}/secure-app:latest" >> $GITHUB_ENV
       - name: Build and Push
         uses: docker/build-push-action@v4
@@ -54,10 +53,10 @@ jobs:
           ignore-unfixed: true
           severity: 'CRITICAL,HIGH'
 
-  # 3. DEPLOY: Orchestrate the Master-Slave Cluster transition
+  # 3. ORCHESTRATED DEPLOYMENT: Transitions to Master-Slave HA
   deploy-production:
     needs: build-and-scan
-    runs-on: self-hosted # Targeting Martine's local runner
+    runs-on: self-hosted # Martine's local runner
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -65,26 +64,37 @@ jobs:
         run: |
           export KUBECONFIG=$HOME/.kube/config
 
-          # PRE-DEPLOY CLEANUP: Resolve 'Split-Brain' DB issue from image_f20320.jpg
+          # PRE-DEPLOY CLEANUP: Crucial for VirtualBox RAM management
           echo "Removing conflicting standalone DB..."
           kubectl delete deployment db-deployment --ignore-not-found=true
 
           # 1. Apply CloudNativePG Cluster
           kubectl apply -f k8s/db-cluster.yaml
 
-          # 2. UPDATED WAIT LOGIC: Match 'Healthy' status from image_e80b14.png
-          echo "Waiting for pg-asanti cluster to be Healthy..."
-          # Increased timeout to 600s to handle VirtualBox resource spikes
-          kubectl wait --for=jsonpath='{.status.phase}'=Healthy cluster/pg-asanti --timeout=600s
+          # 2. RESILIENT STATUS CHECK: Manually verify health to avoid JSONPath timeouts
+          echo "Waiting for pg-asanti cluster to reach Healthy state..."
+          ATTEMPTS=0
+          MAX_ATTEMPTS=20
+          until [ $ATTEMPTS -ge $MAX_ATTEMPTS ] || [ "$(kubectl get cluster pg-asanti -o jsonpath='{.status.phase}')" == "Healthy" ]; do
+            echo "Waiting for cluster... (Attempt: $((ATTEMPTS+1))/$MAX_ATTEMPTS)"
+            sleep 30
+            ATTEMPTS=$((ATTEMPTS+1))
+          done
 
-          # 3. Apply App configurations (5 replicas for COP 450 labs)
+          if [ $ATTEMPTS -ge $MAX_ATTEMPTS ]; then
+            echo "Error: Cluster did not reach Healthy state in time. Current status:"
+            kubectl describe cluster pg-asanti
+            exit 1
+          fi
+
+          # 3. Apply Networking & Application
           kubectl apply -f k8s/service.yaml
           kubectl apply -f k8s/deployment2.yaml
           kubectl apply -f k8s/ingress.yaml
 
-          # 4. FORCE RESTART: Clear the CrashLoopBackOff seen in image_e7a0dc.png
+          # 4. FORCE RESTART: Resolves CrashLoopBackOff from image_e7a0dc.png
           echo "Restarting application pods to refresh database connection..."
           kubectl rollout restart deployment secure-app
           
           # 5. Monitor Rollout
-          kubectl rollout status deployment/secure-app --timeout=180s
+          kubectl rollout status deployment/secure-app --timeout=300s
