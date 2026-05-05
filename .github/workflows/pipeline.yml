@@ -54,7 +54,11 @@ jobs:
           
           # Apply the configuration folder (Deployment, Service, Ingress)
           # Kubernetes handles the image pull automatically
-          kubectl apply -f k8s/
+          #kubectl apply -f k8s/
+          kubectl apply -f k8s/db-cluster.yaml  # 1. Start the DB brain
+          kubectl apply -f k8s/service.yaml     # 2. Set up the App gateway
+          kubectl apply -f k8s/deployment2.yaml  # 3. Launch the App pods
+          kubectl apply -f k8s/ingress.yaml      # 4. Open external access
           
           # Wait for the secure-app deployment to be ready
           kubectl rollout status deployment/secure-app -n default

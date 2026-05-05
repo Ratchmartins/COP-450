@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: secure-app
+  labels:
+    app: secure-app
+spec:
+  # Adjusted to 5 to ensure stability in your VirtualBox environment
+  replicas: 5 
+  selector:
+    matchLabels:
+      app: secure-app
+  template:
+    metadata:
+      labels:
+        app: secure-app
+    spec:
+      imagePullSecrets:
+        - name: ghcr-login-secret
+      containers:
+      - name: secure-app
+        image: ghcr.io/ratchmartins/cop-450/secure-app:latest
+        imagePullPolicy: Always
+        env:
+        # Points to the CloudNativePG Primary (Master) for writes and reads
+        - name: DB_HOST
+          value: "pg-asanti-rw" 
+        - name: DB_NAME
+          value: "myapp_db"
+        - name: DB_USER
+          value: "asanti"
+        - name: DB_PASS
+          value: "password"
+        ports:
+        - containerPort: 5000
+
+        # --- PROBES ---
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          failureThreshold: 3
+
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 20
+          periodSeconds: 15
