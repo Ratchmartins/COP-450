@@ -5,7 +5,7 @@ on:
     branches: ["main"]
 
 jobs:
-  # 1. Security & Quality Job (Pytest & Bandit)
+  # 1. SECURITY & QUALITY: Bandit for SAST and Pytest for logic
   security-and-test:
     runs-on: ubuntu-latest
     steps:
@@ -16,12 +16,12 @@ jobs:
           python-version: '3.10'
       - name: Install Dependencies
         run: pip install -r requirements.txt pytest bandit
-      - name: Run Unit Tests
+      - name: Run Unit Tests (Pytest)
         run: pytest
       - name: Run Code Scan (Bandit)
         run: bandit -r app/
 
-  # 2. Build and Scan Job (Docker & Trivy)
+  # 2. BUILD AND SCAN: Build container and run Trivy SCA
   build-and-scan:
     needs: security-and-test
     runs-on: ubuntu-latest
@@ -38,6 +38,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Set Image Name (Lowercase)
+        # Prevents parsing errors seen in earlier runs
         run: echo "IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY,,}/secure-app:latest" >> $GITHUB_ENV
       - name: Build and Push
         uses: docker/build-push-action@v4
@@ -53,10 +54,10 @@ jobs:
           ignore-unfixed: true
           severity: 'CRITICAL,HIGH'
 
-  # 3. Deploy Job (Orchestration)
+  # 3. DEPLOY: Orchestrate the Master-Slave Cluster transition
   deploy-production:
     needs: build-and-scan
-    runs-on: self-hosted
+    runs-on: self-hosted # Targeting Martine's local runner
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -64,25 +65,26 @@ jobs:
         run: |
           export KUBECONFIG=$HOME/.kube/config
 
-          # CLEANUP: Remove old standalone DB to free up RAM for pg-asanti
+          # PRE-DEPLOY CLEANUP: Resolve 'Split-Brain' DB issue from image_f20320.jpg
+          echo "Removing conflicting standalone DB..."
           kubectl delete deployment db-deployment --ignore-not-found=true
 
-          # 1. Apply Master-Slave Cluster
+          # 1. Apply CloudNativePG Cluster
           kubectl apply -f k8s/db-cluster.yaml
 
-          # 2. Robust Wait Logic
-          echo "Waiting for pg-asanti cluster to be Ready..."
-          # Increased timeout to 600s because VirtualBox can be slow
-          kubectl wait --for=jsonpath='{.status.phase}'=Healthy cluster/pg-asanti --timeout=300s
+          # 2. UPDATED WAIT LOGIC: Match 'Healthy' status from image_e80b14.png
+          echo "Waiting for pg-asanti cluster to be Healthy..."
+          # Increased timeout to 600s to handle VirtualBox resource spikes
+          kubectl wait --for=jsonpath='{.status.phase}'=Healthy cluster/pg-asanti --timeout=600s
 
-          # 3. Apply Networking & Application
+          # 3. Apply App configurations (5 replicas for COP 450 labs)
           kubectl apply -f k8s/service.yaml
           kubectl apply -f k8s/deployment2.yaml
           kubectl apply -f k8s/ingress.yaml
 
-          # 4. Monitor Rollout
-          echo "Monitoring application rollout..."
-          kubectl rollout status deployment/secure-app --timeout=600s
-
-          # 5. Final restart to ensure clean environment
+          # 4. FORCE RESTART: Clear the CrashLoopBackOff seen in image_e7a0dc.png
+          echo "Restarting application pods to refresh database connection..."
           kubectl rollout restart deployment secure-app
+          
+          # 5. Monitor Rollout
+          kubectl rollout status deployment/secure-app --timeout=180s
