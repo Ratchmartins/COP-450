@@ -73,7 +73,7 @@ jobs:
           # 2. Robust Wait Logic
           echo "Waiting for pg-asanti cluster to be Ready..."
           # Increased timeout to 600s because VirtualBox can be slow
-          kubectl wait --for=jsonpath='{.status.phase}'=Ready cluster/pg-asanti --timeout=600s
+          kubectl wait --for=jsonpath='{.status.phase}'=Healthy cluster/pg-asanti --timeout=300s
 
           # 3. Apply Networking & Application
           kubectl apply -f k8s/service.yaml
