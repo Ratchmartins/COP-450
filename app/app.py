@@ -3,42 +3,80 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import text
 import os
 import socket
+import time
 
 app = Flask(__name__)
 
-# --- Database Configuration ---
-DB_USER = os.getenv('DB_USER', 'postgres')
-DB_PASS = os.getenv('DB_PASS', 'password')
-DB_HOST = os.getenv('DB_HOST', 'db-service')
+# -----------------------------
+# DATABASE CONFIGURATION
+# -----------------------------
+DB_USER = os.getenv('DB_USER', 'asanti')
+DB_PASS = os.getenv('DB_PASS')
+DB_HOST = os.getenv('DB_HOST', 'pg-asanti-rw')  # FIXED: CNPG primary service
 DB_NAME = os.getenv('DB_NAME', 'myapp_db')
 
-app.config['SQLALCHEMY_DATABASE_URI'] = f'postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}/{DB_NAME}'
+if not DB_PASS:
+    raise Exception("DB_PASS environment variable is required")
+
+DATABASE_URI = f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:5432/{DB_NAME}"
+
+app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URI
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-# --- Database Model ---
+# -----------------------------
+# DATABASE MODEL
+# -----------------------------
 class Item(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(80), nullable=False)
 
-# Initialize Database tables
-with app.app_context():
-    db.create_all()
+# -----------------------------
+# SAFE DB INITIALIZATION
+# (prevents CrashLoopBackOff)
+# -----------------------------
+def init_db_with_retry(retries=10, delay=5):
+    """
+    Waits for DB to be ready before creating tables.
+    Prevents startup crash if DB is not ready.
+    """
+    for i in range(retries):
+        try:
+            with app.app_context():
+                db.create_all()
+                db.session.execute(text("SELECT 1"))
+            print("✅ Database is ready")
+            return
+        except Exception as e:
+            print(f"⏳ DB not ready (attempt {i+1}/{retries}): {e}")
+            time.sleep(delay)
 
-# --- Health Check Route ---
+    raise Exception("❌ Database not reachable after retries")
+
+# Initialize DB safely
+init_db_with_retry()
+
+# -----------------------------
+# HEALTH CHECK (K8s probes)
+# -----------------------------
 @app.route('/health')
 def health():
-    """Health check for Kubernetes Liveness and Readiness Probes."""
     try:
-        # This checks if the app can actually talk to the DB
         db.session.execute(text('SELECT 1'))
-        return jsonify({"status": "healthy", "pod": socket.gethostname()}), 200
+        return jsonify({
+            "status": "healthy",
+            "pod": socket.gethostname()
+        }), 200
     except Exception as e:
-        return jsonify({"status": "unhealthy", "error": str(e)}), 500
+        return jsonify({
+            "status": "unhealthy",
+            "error": str(e)
+        }), 500
 
-# --- Routes ---
-
+# -----------------------------
+# MAIN ROUTE
+# -----------------------------
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
@@ -48,10 +86,13 @@ def index():
             db.session.add(new_item)
             db.session.commit()
         return redirect(url_for('index'))
-    
+
     items = Item.query.all()
     return render_template('index.html', items=items, pod=socket.gethostname())
 
+# -----------------------------
+# EDIT ITEM
+# -----------------------------
 @app.route('/edit/<int:id>', methods=['GET', 'POST'])
 def edit(id):
     item = Item.query.get_or_404(id)
@@ -61,6 +102,9 @@ def edit(id):
         return redirect(url_for('index'))
     return render_template('edit.html', item=item)
 
+# -----------------------------
+# DELETE ITEM
+# -----------------------------
 @app.route('/delete/<int:id>')
 def delete(id):
     item = Item.query.get_or_404(id)
@@ -68,5 +112,8 @@ def delete(id):
     db.session.commit()
     return redirect(url_for('index'))
 
+# -----------------------------
+# START APP
+# -----------------------------
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000) # nosec B104
+    app.run(host='0.0.0.0', port=5000)
