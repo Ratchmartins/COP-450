@@ -1,51 +1,107 @@
 apiVersion: apps/v1
 kind: Deployment
+
 metadata:
   name: secure-app
   labels:
     app: secure-app
+
 spec:
-  # Adjusted to 5 to ensure stability in your VirtualBox environment
-  replicas: 5 
+  # Optimized for VirtualBox / Local Kubernetes
+  replicas: 2
+
   selector:
     matchLabels:
       app: secure-app
+
   template:
     metadata:
       labels:
         app: secure-app
+
     spec:
       imagePullSecrets:
         - name: ghcr-login-secret
+
       containers:
       - name: secure-app
+
         image: ghcr.io/ratchmartins/cop-450/secure-app:latest
         imagePullPolicy: Always
-        env:
-        # Points to the CloudNativePG Primary (Master) for writes and reads
-        - name: DB_HOST
-          value: "pg-asanti-rw" 
-        - name: DB_NAME
-          value: "myapp_db"
-        - name: DB_USER
-          value: "asanti"
-        - name: DB_PASS
-          value: "password"
+
         ports:
         - containerPort: 5000
 
-        # --- PROBES ---
+        env:
+
+        # -------------------------
+        # DATABASE CONFIGURATION
+        # -------------------------
+
+        # CloudNativePG Read/Write Service
+        - name: DB_HOST
+          value: "pg-asanti-rw"
+
+        # Database Name
+        - name: DB_NAME
+          value: "myapp_db"
+
+        # Database Username from Kubernetes Secret
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: pg-asanti-app
+              key: username
+
+        # Database Password from Kubernetes Secret
+        - name: DB_PASS
+          valueFrom:
+            secretKeyRef:
+              name: pg-asanti-app
+              key: password
+
+        # -------------------------
+        # READINESS PROBE
+        # Ensures traffic only goes
+        # to healthy containers
+        # -------------------------
+
         readinessProbe:
           httpGet:
             path: /health
             port: 5000
+
           initialDelaySeconds: 10
           periodSeconds: 5
+          timeoutSeconds: 3
           failureThreshold: 3
+
+        # -------------------------
+        # LIVENESS PROBE
+        # Restarts frozen containers
+        # -------------------------
 
         livenessProbe:
           httpGet:
             path: /health
             port: 5000
+
           initialDelaySeconds: 20
           periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        # -------------------------
+        # RESOURCE MANAGEMENT
+        # Prevents Kubernetes node
+        # exhaustion in VirtualBox
+        # -------------------------
+
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
