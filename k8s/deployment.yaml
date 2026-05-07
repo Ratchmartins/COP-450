@@ -1,49 +1,93 @@
 apiVersion: apps/v1
 kind: Deployment
+
 metadata:
   name: secure-app
   labels:
     app: secure-app
+
 spec:
-  # Reduced to 2 to prevent overloading your Kali node
-  replicas: 20
+  # Reduced replicas for VirtualBox lab stability
+  replicas: 5
+
   selector:
     matchLabels:
       app: secure-app
+
   template:
     metadata:
       labels:
         app: secure-app
+
     spec:
       imagePullSecrets:
         - name: ghcr-login-secret
+
       containers:
       - name: secure-app
+
         image: ghcr.io/ratchmartins/cop-450/secure-app:latest
         imagePullPolicy: Always
-        env:
-        - name: DB_HOST
-          value: "db-service"
-        - name: DB_PASS
-          value: "password"
+
         ports:
         - containerPort: 5000
 
-        # --- PROBES ADDED BELOW ---
+        env:
 
-        # READINESS: Only sends users to this pod if the /health route returns 200 OK
+        # PostgreSQL Read/Write Service
+        - name: DB_HOST
+          value: "pg-asanti-rw"
+
+        # Database Name
+        - name: DB_NAME
+          value: "myapp_db"
+
+        # Database Username from Secret
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: pg-asanti-app
+              key: username
+
+        # Database Password from Secret
+        - name: DB_PASS
+          valueFrom:
+            secretKeyRef:
+              name: pg-asanti-app
+              key: password
+
+        # -------------------------
+        # READINESS PROBE
+        # -------------------------
         readinessProbe:
           httpGet:
             path: /health
             port: 5000
-          initialDelaySeconds: 10   # Give Flask a moment to boot up
-          periodSeconds: 5          # Check frequently to catch DB drops quickly
-          failureThreshold: 3       # If it fails 3 times, take it out of the service rotation
 
-        # LIVENESS: Restarts the pod if the app completely freezes
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          failureThreshold: 3
+
+        # -------------------------
+        # LIVENESS PROBE
+        # -------------------------
         livenessProbe:
           httpGet:
             path: /health
             port: 5000
-          initialDelaySeconds: 20   # Give it plenty of time for the first start
-          periodSeconds: 15         # Don't check too often to save CPU
+
+          initialDelaySeconds: 20
+          periodSeconds: 15
+          failureThreshold: 3
+
+        # -------------------------
+        # RESOURCE LIMITS
+        # -------------------------
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
